@@ -146,6 +146,9 @@ FileFormat detect_format_by_file_extension(const std::string& filename)
 
   if (ext == "webp")
     return FileFormat::WEBP_ANIMATION;
+  
+  if (ext == "dmi")
+    return FileFormat::PNG_IMAGE;
 
   return FileFormat::UNKNOWN;
 }

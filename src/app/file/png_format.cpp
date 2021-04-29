@@ -126,6 +126,40 @@ png_fixed_point png_ftofix(float x)
   return x * 100000.0f;
 }
 
+int png_user_text(png_structp png, png_infop info, std::shared_ptr<PngOptions>* options)
+{
+  std::shared_ptr<PngOptions>& opts = *options;
+
+  png_textp text_ptr = NULL;
+  int num_text = png_get_text(png, info, &text_ptr, NULL);
+
+  if (png_get_text(png, info, &text_ptr , &num_text) > 0){
+    int i;
+    for (i=0; i<num_text; i++) {
+      PngOptions::TextStore txt;
+
+      txt.compression = text_ptr[i].compression;
+      if(text_ptr[i].key != nullptr) {
+        txt.key = text_ptr[i].key;
+      }
+      if(text_ptr[i].text != nullptr) {
+        txt.text = text_ptr[i].text;
+      }
+      txt.text_length = text_ptr[i].text_length;
+      txt.itxt_length = text_ptr[i].itxt_length;
+      if(text_ptr[i].lang != nullptr) {
+        txt.lang = text_ptr[i].lang;
+      }
+      if(text_ptr[i].lang_key != nullptr) {
+        txt.lang_key = text_ptr[i].lang_key;
+      }
+      opts->addtxt(std::move(txt));
+    }
+  }
+
+  return 1;
+}
+
 int png_user_chunk(png_structp png, png_unknown_chunkp unknown)
 {
   auto data = (std::shared_ptr<PngOptions>*)png_get_user_chunk_ptr(png);
@@ -443,7 +477,10 @@ bool PngFormat::onLoad(FileOp* fop)
     fop->document()->notifyColorSpaceChanged();
   }
 
+  png_user_text(png, info, &opts);
+  
   ASSERT(opts != nullptr);
+
   if (!opts->isEmpty())
     fop->setLoadedFormatOptions(opts);
 
@@ -583,28 +620,51 @@ bool PngFormat::onSave(FileOp* fop)
 
   // User chunks
   auto opts = fop->formatOptionsOfDocument<PngOptions>();
-  if (opts && !opts->isEmpty()) {
-    int num_unknowns = opts->size();
-    ASSERT(num_unknowns > 0);
-    std::vector<png_unknown_chunk> unknowns(num_unknowns);
-    int i = 0;
-    for (const auto& chunk : opts->chunks()) {
-      png_unknown_chunk& unknown = unknowns[i];
-      for (int i=0; i<5; ++i) {
-        unknown.name[i] =
-          (i < int(chunk.name.size()) ? chunk.name[i]: 0);
+  if (opts) {
+    if (!opts->isEmpty()) {
+      int num_unknowns = opts->size();
+      ASSERT(num_unknowns > 0);
+      std::vector<png_unknown_chunk> unknowns(num_unknowns);
+      int i = 0;
+      for (const auto& chunk : opts->chunks()) {
+        png_unknown_chunk& unknown = unknowns[i];
+        for (int i=0; i<5; ++i) {
+          unknown.name[i] =
+            (i < int(chunk.name.size()) ? chunk.name[i]: 0);
+        }
+        PNG_TRACE("PNG: Write unknown chunk '%c%c%c%c'\n",
+                  unknown.name[0],
+                  unknown.name[1],
+                  unknown.name[2],
+                  unknown.name[3]);
+        unknown.data = (png_byte*)&chunk.data[0];
+        unknown.size = chunk.data.size();
+        unknown.location = chunk.location;
+        ++i;
       }
-      PNG_TRACE("PNG: Write unknown chunk '%c%c%c%c'\n",
-                unknown.name[0],
-                unknown.name[1],
-                unknown.name[2],
-                unknown.name[3]);
-      unknown.data = (png_byte*)&chunk.data[0];
-      unknown.size = chunk.data.size();
-      unknown.location = chunk.location;
-      ++i;
+      png_set_unknown_chunks(png, info, &unknowns[0], num_unknowns);
+
+      int num_txts = opts->txtsize();
+      if (num_txts > 0) {
+        ASSERT(num_txts > 0);
+        std::vector<png_text> text_chunks(num_txts);
+        int i = 0;
+        
+        for (const auto& text_struct : opts->texts()){
+          auto& structss = text_chunks[i];
+          structss.compression = text_struct.compression;
+          structss.key = (char *)text_struct.key.c_str();
+          structss.text = (char *)text_struct.text.c_str();
+          structss.text_length = text_struct.text_length;
+          structss.itxt_length = text_struct.itxt_length;
+          structss.lang = (char *)text_struct.lang.c_str();
+          structss.lang_key = (char *)text_struct.lang_key.c_str();
+          ++i;
+        }
+        png_set_text(png, info, &text_chunks[0], num_txts);
+      }
     }
-    png_set_unknown_chunks(png, info, &unknowns[0], num_unknowns);
+
   }
 
   if (fop->preserveColorProfile() &&

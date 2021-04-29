@@ -10,6 +10,7 @@
 
 #include "app/file/format_options.h"
 #include "base/buffer.h"
+#include "png.h"
 
 namespace app {
 
@@ -23,14 +24,42 @@ namespace app {
       int location;
     };
 
+    struct TextStore {
+      int  compression;
+
+      std::string key;
+      std::string text;
+
+      size_t text_length;
+      size_t itxt_length;
+
+      std::string lang;
+      std::string lang_key;
+    };
+
+    using Texts = std::vector<TextStore>;
+
     using Chunks = std::vector<Chunk>;
+
+    void addtxt(TextStore&& txt) {
+      m_userTexts.emplace_back(std::move(txt));
+    }
+
+    int txtsize() const {
+      return int(m_userTexts.size());
+    }
 
     void addChunk(Chunk&& chunk) {
       m_userChunks.emplace_back(std::move(chunk));
     }
 
     bool isEmpty() const {
-      return m_userChunks.empty();
+      if(m_userChunks.empty() && m_userTexts.empty()) {
+        return true;
+      }
+      else {
+        return false;
+      }
     }
 
     int size() const {
@@ -39,8 +68,11 @@ namespace app {
 
     const Chunks& chunks() const { return m_userChunks; }
 
+    const Texts& texts() const { return m_userTexts; }
+
   private:
     Chunks m_userChunks;
+    Texts m_userTexts;
   };
 
 } // namespace app
