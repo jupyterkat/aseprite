@@ -39,6 +39,7 @@ class PngFormat : public FileFormat {
 
   void onGetExtensions(base::paths& exts) const override {
     exts.push_back("png");
+    exts.push_back("dmi");
   }
 
   dio::FileFormat onGetDioFormat() const override {
@@ -126,7 +127,7 @@ png_fixed_point png_ftofix(float x)
   return x * 100000.0f;
 }
 
-int png_user_text(png_structp png, png_infop info, std::shared_ptr<PngOptions>* options)
+void png_read_user_text(png_structp png, png_infop info, std::shared_ptr<PngOptions>* options)
 {
   std::shared_ptr<PngOptions>& opts = *options;
 
@@ -139,14 +140,15 @@ int png_user_text(png_structp png, png_infop info, std::shared_ptr<PngOptions>* 
       PngOptions::TextStore txt;
 
       txt.compression = text_ptr[i].compression;
+      txt.text_length = text_ptr[i].text_length;
+      txt.itxt_length = text_ptr[i].itxt_length;
+
       if(text_ptr[i].key != nullptr) {
         txt.key = text_ptr[i].key;
       }
       if(text_ptr[i].text != nullptr) {
         txt.text = text_ptr[i].text;
       }
-      txt.text_length = text_ptr[i].text_length;
-      txt.itxt_length = text_ptr[i].itxt_length;
       if(text_ptr[i].lang != nullptr) {
         txt.lang = text_ptr[i].lang;
       }
@@ -157,7 +159,7 @@ int png_user_text(png_structp png, png_infop info, std::shared_ptr<PngOptions>* 
     }
   }
 
-  return 1;
+  return;
 }
 
 int png_user_chunk(png_structp png, png_unknown_chunkp unknown)
@@ -477,8 +479,9 @@ bool PngFormat::onLoad(FileOp* fop)
     fop->document()->notifyColorSpaceChanged();
   }
 
-  png_user_text(png, info, &opts);
-  
+  // Reads text chunks and add it to options
+  png_read_user_text(png, info, &opts);
+
   ASSERT(opts != nullptr);
 
   if (!opts->isEmpty())
@@ -653,18 +656,17 @@ bool PngFormat::onSave(FileOp* fop)
         for (const auto& text_struct : opts->texts()){
           auto& structss = text_chunks[i];
           structss.compression = text_struct.compression;
-          structss.key = (char *)text_struct.key.c_str();
-          structss.text = (char *)text_struct.text.c_str();
           structss.text_length = text_struct.text_length;
           structss.itxt_length = text_struct.itxt_length;
-          structss.lang = (char *)text_struct.lang.c_str();
-          structss.lang_key = (char *)text_struct.lang_key.c_str();
+          structss.key = (png_charp)text_struct.key.c_str();
+          structss.text = (png_charp)text_struct.text.c_str();
+          structss.lang = (png_charp)text_struct.lang.c_str();
+          structss.lang_key = (png_charp)text_struct.lang_key.c_str();
           ++i;
         }
         png_set_text(png, info, &text_chunks[0], num_txts);
       }
     }
-
   }
 
   if (fop->preserveColorProfile() &&
