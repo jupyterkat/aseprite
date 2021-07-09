@@ -1,0 +1,24 @@
+﻿{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "aseprite-default",
+      "displayName": "Windows x64 Release with Debug",
+      "description": "Target Windows with the Visual Studio development environment.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LAF_BACKEND": "skia",
+        "SKIA_DIR": "C:\\Users\\MyPC\\Documents\\Gitstuff\\skia",
+        "SKIA_LIBRARY_DIR": "C:\\Users\\MyPC\\Documents\\Gitstuff\\skia\\out\\Release-x64",
+        "SKIA_LIBRARY": "C:\\Users\\MyPC\\Documents\\Gitstuff\\skia\\out\\Release-x64\\skia.lib"
+      },
+      "vendor": { "microsoft.com/VisualStudioSettings/CMake/1.0": { "hostOS": [ "Windows" ] } }
+    }
+  ]
+}
