@@ -576,6 +576,13 @@ Doc* Doc::duplicate(DuplicateType type) const
 
 void Doc::close()
 {
+  try {
+    notify_observers<Doc*>(&DocObserver::onCloseDocument, this);
+  }
+  catch (...) {
+    LOG(ERROR, "DOC: Exception on DocObserver::onCloseDocument()\n");
+  }
+
   removeFromContext();
 }
 

@@ -4,9 +4,9 @@
 
 cmake_minimum_required(VERSION 3.4)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) # We use -std=c++11 instead of -std=gnu++11 in macOS
+set(CMAKE_CXX_EXTENSIONS OFF) # We use -std=c++14 instead of -std=gnu++14 in macOS
 
 if(COMMAND cmake_policy)
   # CMP0003: Libraries linked via full path no longer produce linker search paths.
@@ -31,8 +31,9 @@ set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX ${CMAKE_CURRENT_SOURCE_DIR}/laf/cmake/cxx
 project(aseprite C CXX)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  # As we compile with CMAKE_OSX_DEPLOYMENT_TARGET=10.7, we have to
-  # explicitly say that we want to use libc++ instead of the GNU libstdc++
+  # As we compile with CMAKE_OSX_DEPLOYMENT_TARGET=10.9, we have to
+  # explicitly say that we want to use libc++ instead of the GNU
+  # libstdc++
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
@@ -70,6 +71,7 @@ option(ENABLE_MEMLEAK      "Enable memory-leaks detector (only for developers)" 
 option(ENABLE_NEWS         "Enable the news in Home tab" on)
 option(ENABLE_UPDATER      "Enable automatic check for updates" on)
 option(ENABLE_SCRIPTING    "Compile with scripting support" on)
+option(ENABLE_WEBSOCKET    "Compile with websocket support" on)
 option(ENABLE_TESTS        "Compile unit tests" off)
 option(ENABLE_BENCHMARKS   "Compile benchmarks" off)
 option(ENABLE_TRIAL_MODE   "Compile the trial version" off)
@@ -79,7 +81,13 @@ option(ENABLE_UI           "Compile UI (turn off to compile CLI-only version)" o
 option(FULLSCREEN_PLATFORM "Enable fullscreen by default" off)
 option(ENABLE_CLANG_TIDY   "Enable static analysis" off)
 option(ENABLE_CCACHE       "Use CCache to improve recompilation speed (optional)" on)
+option(ENABLE_SENTRY       "Use Sentry SDK to report crashes" off)
 set(CUSTOM_WEBSITE_URL "" CACHE STRING "Enable custom local webserver to check updates")
+
+if(ENABLE_SENTRY)
+  set(SENTRY_DIR "" CACHE STRING "Sentry native location")
+  set(SENTRY_DNS "" CACHE STRING "Sentry DNS URL")
+endif()
 
 if(ENABLE_NEWS OR ENABLE_UPDATER)
   set(REQUIRE_CURL ON)
@@ -258,7 +266,7 @@ include_directories(${PIXMAN_INCLUDE_DIR})
 # freetype
 if(USE_SHARED_FREETYPE)
   find_package(Freetype REQUIRED)
-else()
+elseif(NOT LAF_BACKEND STREQUAL "skia")
   set(FREETYPE_FOUND ON)
   set(FREETYPE_LIBRARY freetype)
   set(FREETYPE_LIBRARIES ${FREETYPE_LIBRARY})
@@ -269,7 +277,7 @@ include_directories(${FREETYPE_INCLUDE_DIRS})
 # harfbuzz
 if(USE_SHARED_HARFBUZZ)
   find_package(HarfBuzz)
-else()
+elseif(NOT LAF_BACKEND STREQUAL "skia")
   set(HARFBUZZ_LIBRARIES harfbuzz)
   set(HARFBUZZ_INCLUDE_DIRS ${HARFBUZZ_DIR}/src)
 endif()
