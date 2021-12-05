@@ -17,6 +17,7 @@ namespace app {
   // Data for PNG files
   class PngOptions : public FormatOptions {
   public:
+    PngOptions() : keepTextChunks(true) { }
     struct Chunk {
       std::string name;
       base::buffer data;
@@ -45,6 +46,10 @@ namespace app {
       m_userTexts.emplace_back(std::move(txt));
     }
 
+    void clear_txt() { 
+      m_userTexts.clear();
+    }
+
     int txtsize() const {
       return int(m_userTexts.size());
     }
@@ -70,6 +75,7 @@ namespace app {
 
     const Texts& texts() const { return m_userTexts; }
 
+    bool keepTextChunks;
   private:
     Chunks m_userChunks;
     Texts m_userTexts;

@@ -10,12 +10,15 @@
 #endif
 
 #include "app/app.h"
+#include "app/console.h"
+#include "app/context.h"
 #include "app/doc.h"
 #include "app/file/file.h"
 #include "app/file/file_format.h"
 #include "app/file/format_options.h"
 #include "app/file/png_format.h"
 #include "app/file/png_options.h"
+#include "app/pref/preferences.h"
 #include "base/clamp.h"
 #include "base/file_handle.h"
 #include "doc/doc.h"
@@ -23,6 +26,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "png_options.xml.h"
 
 #include "png.h"
 
@@ -56,7 +61,8 @@ class PngFormat : public FileFormat {
       FILE_SUPPORT_GRAYA |
       FILE_SUPPORT_INDEXED |
       FILE_SUPPORT_SEQUENCES |
-      FILE_SUPPORT_PALETTE_WITH_ALPHA;
+      FILE_SUPPORT_PALETTE_WITH_ALPHA |
+      FILE_SUPPORT_GET_FORMAT_OPTIONS;
   }
 
   bool onLoad(FileOp* fop) override;
@@ -65,6 +71,7 @@ class PngFormat : public FileFormat {
   bool onSave(FileOp* fop) override;
   void saveColorSpace(png_structp png, png_infop info, const gfx::ColorSpace* colorSpace);
 #endif
+  FormatOptionsPtr onAskUserForFormatOptions(FileOp* fop) override;
 };
 
 FileFormat* CreatePngFormat()
@@ -889,5 +896,42 @@ void PngFormat::saveColorSpace(png_structp png_ptr, png_infop info_ptr,
 }
 
 #endif  // ENABLE_SAVE
+
+// Shows the PNG configuration dialog.
+FormatOptionsPtr PngFormat::onAskUserForFormatOptions(FileOp* fop)
+{
+  auto opts = fop->formatOptionsOfDocument<PngOptions>();
+#ifdef ENABLE_UI
+  if (fop->context() && fop->context()->isUIAvailable()) {
+    try {
+      auto& pref = Preferences::instance();
+
+      if (pref.isSet(pref.png.keepTextChunks)) {
+        if (!pref.png.keepTextChunks())
+          opts->clear_txt();
+      }
+
+      if (pref.png.showAlert()) {
+        app::gen::PngOptions win;
+        win.keepTextChunks()->setSelected(pref.png.keepTextChunks());
+        win.openWindowInForeground();
+
+        if (win.closer() == win.ok()) {
+          pref.png.keepTextChunks(win.keepTextChunks()->isSelected());
+          pref.png.showAlert(!win.dontShow()->isSelected());
+
+          if (!pref.png.keepTextChunks())
+            opts->clear_txt();
+        }
+      }
+    }
+    catch (std::exception& e) {
+      Console::showException(e);
+      return std::shared_ptr<PngOptions>(0);
+    }
+  }
+#endif  // ENABLE_UI
+  return opts;
+}
 
 } // namespace app

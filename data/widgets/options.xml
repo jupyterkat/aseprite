@@ -454,6 +454,7 @@
 	  <hbox>
             <label text="@.image_format_alerts" />
             <check id="css_options_alert" text="!css" pref="css.show_alert" />
+            <check id="png_options_alert" text="!png" pref="png.show_alert" />
             <check id="gif_options_alert" text="!gif" pref="gif.show_alert" />
             <check id="jpeg_options_alert" text="!jpeg" pref="jpeg.show_alert" />
             <check id="svg_options_alert" text="!svg" pref="svg.show_alert" />

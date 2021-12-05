@@ -1,0 +1,17 @@
+<!-- Aseprite -->
+<!-- Copyright (C) 2001-2018 by David Capello -->
+<gui>
+<window id="png_options" text="@.title">
+  <grid columns="2">
+   <check text="@.keepTextChunks" id="keepTextChunks" cell_hspan="2" />
+	<hbox cell_hspan="2">
+      <check text="@general.dont_show" id="dont_show" tooltip="@general.dont_show_tooltip" />
+      <boxfiller />
+      <hbox homogeneous="true">
+	<button text="@general.ok" closewindow="true" id="ok" magnet="true" minwidth="60" />
+	<button text="@general.cancel" closewindow="true" />
+      </hbox>
+    </hbox>
+  </grid>
+</window>
+</gui>
