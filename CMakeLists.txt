@@ -52,10 +52,6 @@ enable_testing()
 # Options (these can be specified in cmake command line or modifying
 # CMakeCache.txt)
 
-option(WITH_WEBP_SUPPORT            "Enable support to load/save .webp files" on)
-option(WITH_DESKTOP_INTEGRATION     "Enable desktop integration modules" off)
-option(WITH_QT_THUMBNAILER          "Enable kde5/qt5 thumnailer" off)
-
 option(USE_SHARED_CMARK   "Use your installed copy of cmark" off)
 option(USE_SHARED_CURL    "Use your installed copy of curl" off)
 option(USE_SHARED_GIFLIB  "Use your installed copy of giflib" off)
@@ -82,6 +78,9 @@ option(FULLSCREEN_PLATFORM "Enable fullscreen by default" off)
 option(ENABLE_CLANG_TIDY   "Enable static analysis" off)
 option(ENABLE_CCACHE       "Use CCache to improve recompilation speed (optional)" on)
 option(ENABLE_SENTRY       "Use Sentry SDK to report crashes" off)
+option(ENABLE_WEBP         "Enable support to load/save .webp files" on)
+option(ENABLE_DESKTOP_INTEGRATION  "Enable desktop integration modules" off)
+option(ENABLE_QT_THUMBNAILER       "Enable kde5/qt5 thumnailer" off)
 set(CUSTOM_WEBSITE_URL "" CACHE STRING "Enable custom local webserver to check updates")
 
 if(ENABLE_SENTRY)
@@ -235,7 +234,7 @@ include_directories(${PNG_INCLUDE_DIRS})
 add_definitions(-DPNG_NO_MMX_CODE) # Do not use MMX optimizations in PNG code
 
 # libwebp
-if(WITH_WEBP_SUPPORT)
+if(ENABLE_WEBP)
   set(WEBP_LIBRARIES webp webpdemux libwebpmux)
   set(WEBP_INCLUDE_DIR ${LIBWEBP_DIR}/src)
   include_directories(${WEBP_INCLUDE_DIR})
@@ -316,6 +315,8 @@ if(REQUIRE_CURL)
   if(USE_SHARED_CURL)
     find_package(CURL REQUIRED)
   else()
+    set(CURL_FOUND 1)
+    set(CURL_LIBRARY libcurl)
     set(CURL_LIBRARIES libcurl)
     set(CURL_INCLUDE_DIRS ${CURL_DIR}/include)
   endif()
@@ -328,9 +329,6 @@ include_directories(${SIMPLEINI_DIR})
 # Third parties
 add_subdirectory(third_party)
 
-# LAF libraries + Aseprite are compiled with config.h
-include_directories(src)
-add_definitions(-DHAVE_CONFIG_H)
 if(ENABLE_MEMLEAK)
   add_definitions(-DLAF_MEMLEAK)
 endif()
@@ -339,6 +337,11 @@ set(LAF_WITH_TESTS ${ENABLE_TESTS} CACHE BOOL "Enable LAF tests")
 set(UNDO_TESTS     ${ENABLE_TESTS} CACHE BOOL "Enable undo tests")
 
 add_subdirectory(laf)
+
+# LAF libraries + Aseprite are compiled with config.h
+target_include_directories(laf-base PUBLIC src)
+target_compile_definitions(laf-base PUBLIC HAVE_CONFIG_H)
+
 add_subdirectory(src)
 
 ######################################################################
