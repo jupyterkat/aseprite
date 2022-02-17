@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2021  Igara Studio S.A.
+// Copyright (C) 2018-2022  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -36,17 +36,36 @@
 #include "app/ui/main_window.h"
 #include "app/ui/timeline/timeline.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 namespace app {
 
 using namespace ui;
 
+static int get_delay_interval_for_tool_loop(tools::ToolLoop* toolLoop)
+{
+  if (toolLoop->getTracePolicy() == tools::TracePolicy::Last) {
+    // We use the delayed mouse movement for tools like Line,
+    // Rectangle, etc. (tools that use the last mouse position for its
+    // shape, so we can discard intermediate positions).
+    return 5;
+  }
+  else {
+    // Without delay for freehand-like tools
+    return 0;
+  }
+}
+
 DrawingState::DrawingState(Editor* editor,
                            tools::ToolLoop* toolLoop,
                            const DrawingType type)
   : m_editor(editor)
   , m_type(type)
+  , m_delayedMouseMove(this, editor,
+                       get_delay_interval_for_tool_loop(toolLoop))
   , m_toolLoop(toolLoop)
   , m_toolLoopManager(new tools::ToolLoopManager(toolLoop))
   , m_mouseMoveReceived(false)
@@ -64,8 +83,14 @@ DrawingState::~DrawingState()
 }
 
 void DrawingState::initToolLoop(Editor* editor,
+                                const ui::MouseMessage* msg,
                                 const tools::Pointer& pointer)
 {
+  if (msg)
+    m_delayedMouseMove.onMouseDown(msg);
+  else
+    m_delayedMouseMove.initSpritePos(gfx::PointF(pointer.point()));
+
   // Prepare preview image (the destination image will be our preview
   // in the tool-loop time, so we can see what we are drawing)
   editor->renderEngine().setPreviewImage(
@@ -82,6 +107,10 @@ void DrawingState::initToolLoop(Editor* editor,
 
   m_velocity.reset();
   m_lastPointer = pointer;
+  m_mouseDownPos = (msg ? msg->position():
+                          editor->editorToScreen(pointer.point()));
+  m_mouseDownTime = base::current_tick();
+
   m_toolLoopManager->prepareLoop(pointer);
   m_toolLoopManager->pressButton(pointer);
 
@@ -120,6 +149,8 @@ bool DrawingState::onMouseDown(Editor* editor, MouseMessage* msg)
   tools::Pointer pointer = pointer_from_msg(editor, msg,
                                             m_velocity.velocity());
   m_lastPointer = pointer;
+
+  m_delayedMouseMove.onMouseDown(msg);
 
   // Check if this drawing state was started with a Shift+Pencil tool
   // and now the user pressed the right button to draw the straight
@@ -160,22 +191,22 @@ bool DrawingState::onMouseUp(Editor* editor, MouseMessage* msg)
 {
   ASSERT(m_toolLoopManager != NULL);
 
+  m_lastPointer = pointer_from_msg(editor, msg, m_velocity.velocity());
+  m_delayedMouseMove.onMouseUp(msg);
+
   // Selection tools with Replace mode are cancelled with a simple click.
   // ("one point" controller selection tool i.e. the magic wand, and
   // selection tools with Add or Subtract mode aren't cancelled with
   // one click).
   if (!m_toolLoop->getInk()->isSelection() ||
       m_toolLoop->getController()->isOnePoint() ||
-      m_mouseMoveReceived ||
+      !canInterpretMouseMovementAsJustOneClick() ||
       // In case of double-click (to select tiles) we don't want to
       // deselect if the mouse is not moved. In this case the tile
       // will be selected anyway even if the mouse is not moved.
       m_type == DrawingType::SelectTiles ||
       (editor->getToolLoopModifiers() != tools::ToolLoopModifiers::kReplaceSelection &&
        editor->getToolLoopModifiers() != tools::ToolLoopModifiers::kIntersectSelection)) {
-    m_lastPointer = pointer_from_msg(editor, msg,
-                                     m_velocity.velocity());
-
     // Notify the release of the mouse button to the tool loop
     // manager. This is the correct way to say "the user finishes the
     // drawing trace correctly".
@@ -218,17 +249,35 @@ bool DrawingState::onMouseMove(Editor* editor, MouseMessage* msg)
   // Update velocity sensor.
   m_velocity.updateWithScreenPoint(msg->position());
 
-  // The autoScroll() function controls the "infinite scroll" when we
-  // touch the viewport borders.
-  gfx::Point mousePos = editor->autoScroll(msg, AutoScroll::MouseDir);
-  handleMouseMovement(
-    tools::Pointer(editor->screenToEditor(mousePos),
-                   m_velocity.velocity(),
-                   button_from_msg(msg),
-                   msg->pointerType(),
-                   msg->pressure()));
+  // Update pointer with new mouse position
+  m_lastPointer = tools::Pointer(gfx::Point(m_delayedMouseMove.spritePos()),
+                                 m_velocity.velocity(),
+                                 button_from_msg(msg),
+                                 msg->pointerType(),
+                                 msg->pressure());
 
+  // Indicate that we've received a real mouse movement event here
+  // (used in the Rectangular Marquee to deselect when we just do a
+  // simple click without moving the mouse).
+  m_mouseMoveReceived = true;
+  gfx::Point delta = (msg->position() - m_mouseDownPos);
+  m_mouseMaxDelta.x = std::max(m_mouseMaxDelta.x, std::abs(delta.x));
+  m_mouseMaxDelta.y = std::max(m_mouseMaxDelta.y, std::abs(delta.y));
+
+  // Use DelayedMouseMove for tools like line, rectangle, etc. (that
+  // use the only the last mouse position) to filter out rapid mouse
+  // movement.
+  m_delayedMouseMove.onMouseMove(msg);
   return true;
+}
+
+void DrawingState::onCommitMouseMove(Editor* editor,
+                                     const gfx::PointF& spritePos)
+{
+  if (m_toolLoop &&
+      !m_toolLoop->isCanceled()) {
+    handleMouseMovement();
+  }
 }
 
 bool DrawingState::onSetCursor(Editor* editor, const gfx::Point& mouseScreenPos)
@@ -289,12 +338,12 @@ bool DrawingState::onScrollChange(Editor* editor)
     // Update velocity sensor.
     m_velocity.updateWithScreenPoint(mousePos); // TODO add scroll as velocity?
 
-    handleMouseMovement(
-      tools::Pointer(editor->screenToEditor(mousePos),
-                     m_velocity.velocity(),
-                     m_lastPointer.button(),
-                     tools::Pointer::Type::Unknown,
-                     0.0f));
+    m_lastPointer = tools::Pointer(editor->screenToEditor(mousePos),
+                                   m_velocity.velocity(),
+                                   m_lastPointer.button(),
+                                   tools::Pointer::Type::Unknown,
+                                   0.0f);
+    handleMouseMovement();
   }
   return true;
 }
@@ -312,14 +361,23 @@ void DrawingState::onExposeSpritePixels(const gfx::Region& rgn)
     m_toolLoop->validateDstImage(rgn);
 }
 
-void DrawingState::handleMouseMovement(const tools::Pointer& pointer)
+void DrawingState::handleMouseMovement()
 {
-  m_mouseMoveReceived = true;
-  m_lastPointer = pointer;
-
   // Notify mouse movement to the tool
   ASSERT(m_toolLoopManager);
-  m_toolLoopManager->movement(pointer);
+  m_toolLoopManager->movement(m_lastPointer);
+}
+
+bool DrawingState::canInterpretMouseMovementAsJustOneClick()
+{
+  // If the user clicked (pressed and released the mouse button) in
+  // less than 250 milliseconds in "the same place" (inside a 7 pixels
+  // rectangle actually, to detect stylus shake).
+  return
+    !m_mouseMoveReceived ||
+    (m_mouseMaxDelta.x < 4 &&
+     m_mouseMaxDelta.y < 4 &&
+     (base::current_tick() - m_mouseDownTime < 250));
 }
 
 bool DrawingState::canExecuteCommands()
