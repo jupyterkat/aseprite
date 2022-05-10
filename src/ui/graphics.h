@@ -1,5 +1,5 @@
 // Aseprite UI Library
-// Copyright (C) 2019-2020  Igara Studio S.A.
+// Copyright (C) 2019-2022  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This file is released under the terms of the MIT license.
@@ -30,6 +30,7 @@ namespace gfx {
 
 namespace os {
   class DrawTextDelegate;
+  struct Sampling;
 }
 
 namespace ui {
@@ -89,6 +90,11 @@ namespace ui {
     void drawSurface(os::Surface* surface,
                      const gfx::Rect& srcRect,
                      const gfx::Rect& dstRect);
+    void drawSurface(os::Surface* surface,
+                     const gfx::Rect& srcRect,
+                     const gfx::Rect& dstRect,
+                     const os::Sampling& sampling,
+                     const ui::Paint* paint = nullptr);
     void drawRgbaSurface(os::Surface* surface, int x, int y);
     void drawRgbaSurface(os::Surface* surface, int srcx, int srcy, int dstx, int dsty, int w, int h);
     void drawRgbaSurface(os::Surface* surface,
@@ -111,11 +117,10 @@ namespace ui {
     os::Font* font() { return m_font.get(); }
     void setFont(const os::FontRef& font);
 
-    void drawText(base::utf8_const_iterator it,
-                  const base::utf8_const_iterator& end,
-                  gfx::Color fg, gfx::Color bg, const gfx::Point& pt,
-                  os::DrawTextDelegate* delegate);
-    void drawText(const std::string& str, gfx::Color fg, gfx::Color bg, const gfx::Point& pt);
+    void drawText(const std::string& str,
+                  gfx::Color fg, gfx::Color bg,
+                  const gfx::Point& pt,
+                  os::DrawTextDelegate* delegate = nullptr);
     void drawUIText(const std::string& str, gfx::Color fg, gfx::Color bg, const gfx::Point& pt, const int mnemonic);
     void drawAlignedUIText(const std::string& str, gfx::Color fg, gfx::Color bg, const gfx::Rect& rc, const int align);
 

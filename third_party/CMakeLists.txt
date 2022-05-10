@@ -1,5 +1,5 @@
 # Aseprite
-# Copyright (C) 2021  Igara Studio S.A.
+# Copyright (C) 2021-2022  Igara Studio S.A.
 # Copyright (C) 2001-2018  David Capello
 
 include_directories(.)
@@ -85,6 +85,13 @@ if(NOT USE_SHARED_FREETYPE AND NOT LAF_BACKEND STREQUAL "skia")
 
   add_subdirectory(freetype2)
 
+  target_compile_definitions(freetype PUBLIC
+    FT_CONFIG_OPTION_SYSTEM_ZLIB)
+  if(UNIX)
+    target_include_directories(freetype BEFORE PUBLIC
+      ${CMAKE_CURRENT_BINARY_DIR}/freetype2/include)
+  endif()
+
   if(NOT USE_SHARED_LIBPNG)
     add_dependencies(freetype ${PNG_LIBRARIES})
   endif()
@@ -132,6 +139,7 @@ set(ENABLE_LIBXML2 OFF CACHE BOOL "Enable the use of the system libxml2 library 
 set(ENABLE_CAT OFF CACHE BOOL "Enable cat building")
 set(ENABLE_TAR OFF CACHE BOOL "Enable tar building")
 set(ENABLE_CPIO OFF CACHE BOOL "Enable cpio building")
+set(ENABLE_LIBB2 OFF CACHE BOOL "Enable the use of the system LIBB2 library if found")
 add_subdirectory(libarchive)
 target_include_directories(archive_static INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libarchive/libarchive>)

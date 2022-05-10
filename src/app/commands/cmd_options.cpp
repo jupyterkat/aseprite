@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2021  Igara Studio S.A.
+// Copyright (C) 2018-2022  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -29,6 +29,7 @@
 #include "app/ui/color_button.h"
 #include "app/ui/main_window.h"
 #include "app/ui/pref_widget.h"
+#include "app/ui/sampling_selector.h"
 #include "app/ui/separator_in_view.h"
 #include "app/ui/skin/skin_theme.h"
 #include "base/clamp.h"
@@ -181,7 +182,8 @@ class OptionsWindow : public app::gen::Options {
     void uninstall() {
       ASSERT(m_extension);
       ASSERT(canBeUninstalled());
-      App::instance()->extensions().uninstallExtension(m_extension);
+      App::instance()->extensions().uninstallExtension(m_extension,
+                                                       DeletePluginPref::kYes);
       m_extension = nullptr;
     }
 
@@ -449,8 +451,18 @@ public:
 
     showHome()->setSelected(m_pref.general.showHome());
 
-    // Right-click
+    // Editor sampling
+    samplingPlaceholder()->addChild(
+      m_samplingSelector = new SamplingSelector(
+        SamplingSelector::Behavior::ChangeOnSave));
 
+    m_samplingSelector->setEnabled(newRenderEngine()->isSelected());
+    newRenderEngine()->Click.connect(
+      [this]{
+        m_samplingSelector->setEnabled(newRenderEngine()->isSelected());
+      });
+
+    // Right-click
     static_assert(int(app::gen::RightClickMode::PAINT_BGCOLOR) == 0, "");
     static_assert(int(app::gen::RightClickMode::PICK_FGCOLOR) == 1, "");
     static_assert(int(app::gen::RightClickMode::ERASE) == 2, "");
@@ -548,9 +560,9 @@ public:
   void saveConfig() {
     // Save preferences in widgets that are bound to options automatically
     {
-      Message* msg = new Message(kSavePreferencesMessage);
-      msg->setPropagateToChildren(msg);
-      sendMessage(msg);
+      Message msg(kSavePreferencesMessage);
+      msg.setPropagateToChildren(true);
+      sendMessage(&msg);
     }
 
     // Share crashdb
@@ -618,6 +630,8 @@ public:
     m_pref.editor.straightLinePreview(straightLinePreview()->isSelected());
     m_pref.eyedropper.discardBrush(discardBrush()->isSelected());
     m_pref.editor.rightClickMode(static_cast<app::gen::RightClickMode>(rightClickBehavior()->getSelectedItemIndex()));
+    if (m_samplingSelector)
+      m_samplingSelector->save();
     m_pref.cursor.paintingCursorType(static_cast<app::gen::PaintingCursorType>(paintingCursorType()->getSelectedItemIndex()));
     m_pref.cursor.cursorColor(cursorColor()->getColor());
     m_pref.cursor.brushPreview(static_cast<app::gen::BrushPreview>(brushPreview()->getSelectedItemIndex()));
@@ -1179,7 +1193,7 @@ private:
     if (themeList()->getItemsCount() > 0)
       return;
 
-    auto theme = skin::SkinTheme::instance();
+    auto theme = skin::SkinTheme::get(this);
     auto userFolder = userThemeFolder();
     auto folders = themeFolders();
     std::sort(folders.begin(), folders.end());
@@ -1265,6 +1279,10 @@ private:
       return;
 
     loadExtensionsByCategory(
+      Extension::Category::Keys,
+      Strings::options_keys_extensions());
+
+    loadExtensionsByCategory(
       Extension::Category::Languages,
       Strings::options_language_extensions());
 
@@ -1310,7 +1328,7 @@ private:
                   const bool updateScaling) {
     try {
       if (themeName != m_pref.theme.selected()) {
-        auto theme = static_cast<skin::SkinTheme*>(ui::get_theme());
+        auto theme = skin::SkinTheme::get(this);
 
         // Change theme name from preferences
         m_pref.theme.selected(themeName);
@@ -1428,7 +1446,7 @@ private:
 
         // Uninstall old version
         if (ext->canBeUninstalled()) {
-          exts.uninstallExtension(ext);
+          exts.uninstallExtension(ext, DeletePluginPref::kNo);
 
           ExtensionItem* item = getItemByExtension(ext);
           if (item)
@@ -1628,6 +1646,7 @@ private:
   int m_restoreUIScaling;
   std::vector<os::ColorSpaceRef> m_colorSpaces;
   std::string m_templateTextForDisplayCS;
+  SamplingSelector* m_samplingSelector = nullptr;
 };
 
 class OptionsCommand : public Command {

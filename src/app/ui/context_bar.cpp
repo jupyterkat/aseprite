@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2020  Igara Studio S.A.
+// Copyright (C) 2018-2022  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -43,6 +43,7 @@
 #include "app/ui/editor/editor.h"
 #include "app/ui/icon_button.h"
 #include "app/ui/keyboard_shortcuts.h"
+#include "app/ui/sampling_selector.h"
 #include "app/ui/selection_mode_field.h"
 #include "app/ui/skin/skin_theme.h"
 #include "app/ui_context.h"
@@ -56,6 +57,7 @@
 #include "doc/selected_objects.h"
 #include "doc/slice.h"
 #include "obs/connection.h"
+#include "os/sampling.h"
 #include "os/surface.h"
 #include "os/system.h"
 #include "render/dithering.h"
@@ -193,7 +195,7 @@ protected:
   }
 
   void onSizeHint(SizeHintEvent& ev) override {
-    SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+    auto theme = SkinTheme::get(this);
     ev.setSizeHint(Size(theme->dimensions.brushTypeWidth(),
                         theme->dimensions.contextBarHeight()));
   }
@@ -356,7 +358,7 @@ public:
 protected:
   void onInitTheme(InitThemeEvent& ev) override {
     CheckBox::onInitTheme(ev);
-    setStyle(SkinTheme::instance()->styles.miniCheckBox());
+    setStyle(SkinTheme::get(this)->styles.miniCheckBox());
   }
 
   void onClick(Event& ev) override {
@@ -372,7 +374,7 @@ protected:
 class ContextBar::PaintBucketSettingsField : public ButtonSet {
 public:
   PaintBucketSettingsField() : ButtonSet(1) {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     addItem(theme->parts.timelineGear());
   }
 
@@ -457,7 +459,7 @@ class ContextBar::InkTypeField : public ButtonSet {
 public:
   InkTypeField(ContextBar* owner) : ButtonSet(1)
                                   , m_owner(owner) {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     addItem(theme->parts.inkSimple());
   }
 
@@ -477,7 +479,7 @@ public:
   }
 
   void setInkTypeIcon(InkType inkType) {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     SkinPartPtr part = theme->parts.inkSimple();
 
     switch (inkType) {
@@ -510,7 +512,7 @@ protected:
 class ContextBar::InkShadesField : public HBox {
 public:
   InkShadesField(ColorBar* colorBar)
-    : m_button(SkinTheme::instance()->parts.iconArrowDown())
+    : m_button(SkinTheme::get(this)->parts.iconArrowDown())
     , m_shade(Shade(), ColorShades::DragAndDropEntries)
     , m_loaded(false) {
     addChild(&m_button);
@@ -561,7 +563,7 @@ public:
 private:
   void onInitTheme(InitThemeEvent& ev) override {
     HBox::onInitTheme(ev);
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     noBorderNoChildSpacing();
     m_shade.setStyle(theme->styles.topShadeView());
     m_button.setBgColor(theme->colors.workspace());
@@ -585,7 +587,7 @@ private:
     save.Click.connect([this]{ onSaveShade(); });
 
     if (!m_shades.empty()) {
-      SkinTheme* theme = SkinTheme::instance();
+      auto theme = SkinTheme::get(this);
 
       menu.addChild(new MenuSeparator);
 
@@ -602,7 +604,7 @@ private:
         close->InitTheme.connect(
           [close]{
             close->setBgColor(
-              SkinTheme::instance()->colors.menuitemNormalFace());
+              SkinTheme::get(close)->colors.menuitemNormalFace());
           });
         close->initTheme();
         close->Click.connect(
@@ -758,7 +760,7 @@ public:
     : m_icon(1)
     , m_maskColor(app::Color::fromMask(), IMAGE_RGB, ColorButtonOptions())
     , m_owner(owner) {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
 
     addChild(&m_icon);
     addChild(&m_maskColor);
@@ -821,7 +823,7 @@ private:
   void onOpaqueChange() {
     bool opaque = Preferences::instance().selection.opaque();
 
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     SkinPartPtr part = (opaque ? theme->parts.selectionOpaque():
                                  theme->parts.selectionMasked());
     m_icon.getItem(0)->setIcon(part);
@@ -850,7 +852,7 @@ class ContextBar::PivotField : public ButtonSet {
 public:
   PivotField()
     : ButtonSet(1) {
-    addItem(SkinTheme::instance()->parts.pivotCenter());
+    addItem(SkinTheme::get(this)->parts.pivotCenter());
 
     Preferences::instance().selection.pivotPosition.AfterChange.connect(
       [this]{ onPivotChange(); });
@@ -863,7 +865,7 @@ private:
   void onItemChange(Item* item) override {
     ButtonSet::onItemChange(item);
 
-    SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+    auto theme = SkinTheme::get(this);
     gfx::Rect bounds = this->bounds();
 
     Menu menu;
@@ -906,7 +908,7 @@ private:
   }
 
   void onPivotChange() {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     SkinPartPtr part;
     switch (Preferences::instance().selection.pivotPosition()) {
       case app::gen::PivotPosition::NORTHWEST: part = theme->parts.pivotNorthwest(); break;
@@ -975,7 +977,7 @@ public:
   DynamicsField(ContextBar* ctxBar)
     : ButtonSet(1)
     , m_ctxBar(ctxBar) {
-    addItem(SkinTheme::instance()->parts.dynamics());
+    addItem(SkinTheme::get(this)->parts.dynamics());
   }
 
   void switchPopup() {
@@ -1064,7 +1066,7 @@ public:
 protected:
   void onInitTheme(InitThemeEvent& ev) override {
     CheckBox::onInitTheme(ev);
-    setStyle(SkinTheme::instance()->styles.miniCheckBox());
+    setStyle(SkinTheme::get(this)->styles.miniCheckBox());
   }
 
   void onClick(Event& ev) override {
@@ -1092,7 +1094,7 @@ protected:
 class ContextBar::GradientTypeField : public ButtonSet {
 public:
   GradientTypeField() : ButtonSet(2) {
-    SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+    auto theme = SkinTheme::get(this);
 
     addItem(theme->parts.linearGradient());
     addItem(theme->parts.radialGradient());
@@ -1113,7 +1115,7 @@ public:
 class ContextBar::DropPixelsField : public ButtonSet {
 public:
   DropPixelsField() : ButtonSet(2) {
-    SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+    auto theme = SkinTheme::get(this);
 
     addItem(theme->parts.dropPixelsOk());
     addItem(theme->parts.dropPixelsCancel());
@@ -1197,7 +1199,7 @@ public:
 protected:
   void onInitTheme(InitThemeEvent& ev) override {
     CheckBox::onInitTheme(ev);
-    setStyle(SkinTheme::instance()->styles.miniCheckBox());
+    setStyle(SkinTheme::get(this)->styles.miniCheckBox());
   }
 
   void onClick(Event& ev) override {
@@ -1220,7 +1222,7 @@ class ContextBar::SymmetryField : public ButtonSet {
 public:
   SymmetryField() : ButtonSet(3) {
     setMultiMode(MultiMode::Set);
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
     addItem(theme->parts.horizontalSymmetry());
     addItem(theme->parts.verticalSymmetry());
     addItem("...");
@@ -1342,7 +1344,7 @@ public:
     , m_combobox(this)
     , m_action(2)
   {
-    SkinTheme* theme = SkinTheme::instance();
+    auto theme = SkinTheme::get(this);
 
     m_sel.addItem("All");
     m_sel.addItem("None");
@@ -1537,6 +1539,7 @@ ContextBar::ContextBar(TooltipManager* tooltipManager,
   m_selectionOptionsBox->addChild(m_rotAlgo = new RotAlgorithmField());
 
   addChild(m_zoomButtons = new ZoomButtons);
+  addChild(m_samplingSelector = new SamplingSelector);
 
   addChild(m_brushBack = new BrushBackField);
   addChild(m_brushType = new BrushTypeField(this));
@@ -1611,7 +1614,7 @@ void ContextBar::onInitTheme(ui::InitThemeEvent& ev)
 {
   Box::onInitTheme(ev);
 
-  SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+  auto theme = SkinTheme::get(this);
   gfx::Border border = this->border();
   border.bottom(2*guiscale());
   setBorder(border);
@@ -1623,7 +1626,7 @@ void ContextBar::onInitTheme(ui::InitThemeEvent& ev)
 
 void ContextBar::onSizeHint(SizeHintEvent& ev)
 {
-  SkinTheme* theme = static_cast<SkinTheme*>(this->theme());
+  auto theme = SkinTheme::get(this);
   ev.setSizeHint(gfx::Size(0, theme->dimensions.contextBarHeight()));
 }
 
@@ -1844,13 +1847,6 @@ void ContextBar::updateForTool(tools::Tool* tool)
      activeBrush()->type() == kLineBrushType);
 
   // True if the current tool is eyedropper.
-  const bool needZoomButtons = tool &&
-    (tool->getInk(0)->isZoom() ||
-     tool->getInk(1)->isZoom() ||
-     tool->getInk(0)->isScrollMovement() ||
-     tool->getInk(1)->isScrollMovement());
-
-  // True if the current tool is eyedropper.
   const bool isEyedropper = tool &&
     (tool->getInk(0)->isEyedropper() ||
      tool->getInk(1)->isEyedropper());
@@ -1902,7 +1898,7 @@ void ContextBar::updateForTool(tools::Tool* tool)
   const bool supportDynamics = (!hasImageBrush);
 
   // Show/Hide fields
-  m_zoomButtons->setVisible(needZoomButtons);
+  m_zoomButtons->setVisible(needZoomButtons(tool));
   m_brushBack->setVisible(supportOpacity && hasImageBrush && !withDithering);
   m_brushType->setVisible(supportOpacity && (!isFloodfill || (isFloodfill && hasImageBrush && !withDithering)));
   m_brushSize->setVisible(supportOpacity && !isFloodfill && !hasImageBrush);
@@ -1940,7 +1936,11 @@ void ContextBar::updateForTool(tools::Tool* tool)
   if (updateShade)
     m_inkShades->updateShadeFromColorBarPicks();
 
-  layout();
+  if (!updateSamplingVisibility(tool)) {
+    // updateSamplingVisibility() returns false if it doesn't layout()
+    // the ContextBar.
+    layout();
+  }
 }
 
 void ContextBar::updateForMovingPixels()
@@ -1978,6 +1978,26 @@ void ContextBar::updateToolLoopModifiersIndicators(tools::ToolLoopModifiers modi
     mode = gen::SelectionMode::INTERSECT;
 
   m_selectionMode->setSelectionMode(mode);
+}
+
+bool ContextBar::updateSamplingVisibility(tools::Tool* tool)
+{
+  if (!tool)
+    tool = App::instance()->activeTool();
+
+  const bool newVisibility =
+    needZoomButtons(tool) &&
+    current_editor &&
+    (current_editor->projection().scaleX() < 1.0 ||
+     current_editor->projection().scaleY() < 1.0) &&
+    current_editor->isUsingNewRenderEngine();
+
+  if (newVisibility == m_samplingSelector->hasFlags(HIDDEN)) {
+    m_samplingSelector->setVisible(newVisibility);
+    layout();
+    return true;
+  }
+  return false;
 }
 
 void ContextBar::updateAutoSelectLayer(bool state)
@@ -2283,6 +2303,15 @@ void ContextBar::showDynamics()
 {
   if (m_dynamics->isVisible())
     m_dynamics->switchPopup();
+}
+
+bool ContextBar::needZoomButtons(tools::Tool* tool) const
+{
+  return tool &&
+    (tool->getInk(0)->isZoom() ||
+     tool->getInk(1)->isZoom() ||
+     tool->getInk(0)->isScrollMovement() ||
+     tool->getInk(1)->isScrollMovement());
 }
 
 } // namespace app
